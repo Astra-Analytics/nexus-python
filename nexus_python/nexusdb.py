@@ -1,12 +1,10 @@
 import requests
 import os
 
-api_key = os.environ.get("NEXUSDB_API_KEY")
-
 
 class NexusDB:
-    def __init__(self, base_url="http://localhost/query", api_key=None):
-        self.base_url = base_url
+    def __init__(self, api_key=None):
+        self.base_url = os.environ.get("BASE_URL", "https://api.nexusdb.io/query")
         # Use the provided API key or fallback to the environment variable
         self.api_key = (
             api_key if api_key is not None else os.environ.get("NEXUSDB_API_KEY")
@@ -134,15 +132,15 @@ class NexusDB:
         return response.text
 
     def delete(self, relation_name, primary_keys):
-        """Looks up data from the specified relation."""
-        # Using fields=None and then setting it to [] if None to avoid mutable default argument
-        if fields is None:
-            fields = []
+        """Deletes data from the specified relation based on primary keys."""
+        # Convert primary_keys dict to the expected list format
+        primary_keys_list = [{"name": k, "value": v} for k, v in primary_keys.items()]
 
         data = {
             "query_type": "Delete",
             "relation_name": relation_name,
-            "primary_keys": primary_keys,
+            "primary_keys": primary_keys_list,
         }
+        print(f"data: {data}\n\n")
         response = requests.post(self.base_url, headers=self.headers, json=data)
         return response.text

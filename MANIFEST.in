@@ -1,0 +1,4 @@
+exclude .env
+
+recursive-exclude * __pycache__
+recursive-exclude * *.pyc

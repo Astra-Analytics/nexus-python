@@ -144,3 +144,37 @@ class NexusDB:
         print(f"data: {data}\n\n")
         response = requests.post(self.base_url, headers=self.headers, json=data)
         return response.text
+
+    def edit_fields(
+        self,
+        relation_name,
+        fields=None,
+        add_columns=None,
+        condition="",
+        access_keys=None,
+    ):
+        """
+        Edits columns in the specified relation, optionally adding new columns.
+
+        :param relation_name: The name of the relation to edit.
+        :param fields: Optional list of fields to include in the edit.
+        :param add_columns: Optional structure defining new columns to add.
+        :param condition: Optional condition to apply to the edit.
+        :param access_keys: Optional list of access keys for authorization.
+        :return: The server's response.
+        """
+        # Prepare the data payload for the request
+        data = {
+            "query_type": "ColumnEditor",
+            "relation_name": relation_name,
+            "fields": fields if fields is not None else [],
+            "add_columns": add_columns,
+            "condition": condition,
+            "access_keys": access_keys if access_keys is not None else [],
+        }
+
+        # Send the request to the server
+        response = requests.post(self.base_url, headers=self.headers, json=data)
+
+        # Return the server's response
+        return response.text

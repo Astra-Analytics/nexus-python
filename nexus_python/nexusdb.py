@@ -1,15 +1,21 @@
 import requests
 import os
+from openai import OpenAI
 
 
 class NexusDB:
-    def __init__(self, api_key=None):
+    def __init__(self, api_key=None, openai_api_key=None):
         self.base_url = os.environ.get("BASE_URL", "https://api.nexusdb.io/query")
-        # Use the provided API key or fallback to the environment variable
         self.api_key = (
             api_key if api_key is not None else os.environ.get("NEXUSDB_API_KEY")
         )
+        self.openai_api_key = (
+            openai_api_key
+            if openai_api_key is not None
+            else os.environ.get("OPENAI_API_KEY")
+        )
         self.headers = {"Content-Type": "application/json", "API-Key": self.api_key}
+        self.openai_client = OpenAI(api_key=self.openai_api_key)
 
     def create(self, relation_name, columns):
         """Creates a new relation with the specified columns, making adjustments for optional parameters."""
@@ -177,4 +183,59 @@ class NexusDB:
         response = requests.post(self.base_url, headers=self.headers, json=data)
 
         # Return the server's response
+        return response.text
+
+    def insert_with_vector(
+        self,
+        relation_name,
+        text,
+        vectors,
+        access_keys=None,
+        metadata=None,
+        references=None,
+    ):
+        payload = {
+            "query_type": "Insert",
+            "relation_name": relation_name,
+            "searchable_content": {
+                "text": text,
+                "vectors": vectors,
+            },
+        }
+        # Only add optional parameters to the payload if they are not None
+        if access_keys is not None:
+            payload["searchable_content"]["access_keys"] = access_keys
+        if metadata is not None:
+            payload["searchable_content"]["metadata"] = metadata
+        if references is not None:
+            payload["searchable_content"]["reference"] = references
+
+        response = requests.post(self.base_url, json=payload, headers=self.headers)
+        return response.text
+
+    def vector_search(
+        self,
+        query_vector,
+        access_keys=None,
+        search_radius=None,
+        number_of_results=None,
+        filter_statement=None,
+    ):
+        query_payload = {
+            "query_type": "VectorSearch",
+            "query_vector": query_vector,
+        }
+        # Only add optional parameters to the query payload if they are not None
+        if access_keys is not None:
+            query_payload["access_keys"] = access_keys
+        if search_radius is not None:
+            query_payload["search_radius"] = search_radius
+        if number_of_results is not None:
+            query_payload["number_of_results"] = number_of_results
+        if filter_statement is not None:
+            query_payload["filter_statement"] = filter_statement
+
+        response = requests.post(
+            self.base_url, json=query_payload, headers=self.headers
+        )
         return response.text

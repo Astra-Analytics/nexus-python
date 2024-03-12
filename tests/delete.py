@@ -10,10 +10,10 @@ def main():
     nexus_db = NexusDB()
 
     # Step 1: Create a new relation
-    relation_name = "example_relation"
+    relation_name = "example_relation2"
     columns = [
-        {"name": "id", "type": "Int", "is_primary": True},
-        {"name": "name", "type": "String"},
+        {"name": "id"},
+        {"name": "name"},
     ]
     create_response = nexus_db.create(relation_name, columns)
     print("Create relation response:", create_response)
@@ -30,8 +30,8 @@ def main():
     print("Delete data response:", delete_response)
 
     # Optional: Lookup to verify deletion (not implemented in the provided class, adjust as needed)
-    lookup_response = nexus_db.lookup(relation_name)
-    print("Lookup after deletion:", lookup_response)
+    lookup_response = nexus_db.lookup(relation_name, tabulate=True)
+    print("Lookup after deletion:\n", lookup_response)
 
 
 if __name__ == "__main__":

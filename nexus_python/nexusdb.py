@@ -1,21 +1,63 @@
 import requests
 import os
-from openai import OpenAI
+from tabulate import tabulate
 
 
 class NexusDB:
-    def __init__(self, api_key=None, openai_api_key=None):
+    def __init__(self, api_key=None):
         self.base_url = os.environ.get("BASE_URL", "https://api.nexusdb.io/query")
         self.api_key = (
             api_key if api_key is not None else os.environ.get("NEXUSDB_API_KEY")
         )
-        self.openai_api_key = (
-            openai_api_key
-            if openai_api_key is not None
-            else os.environ.get("OPENAI_API_KEY")
-        )
+
         self.headers = {"Content-Type": "application/json", "API-Key": self.api_key}
-        self.openai_client = OpenAI(api_key=self.openai_api_key)
+
+    def _process_response(self, response, tabulate_option=False):
+        if not response.text:
+            print("Error: Empty response from server")
+            return
+
+        try:
+            response_data = response.json()
+            if (
+                tabulate_option
+                and "headers" in response_data
+                and "rows" in response_data
+            ):
+                # Simplify and prepare rows for tabulation
+                simplified_rows = []
+                for row in response_data["rows"]:
+                    simplified_row = []
+                    for cell in row:
+                        # Simplify data structure for Num and Str types, or fallback to the original structure
+                        if isinstance(cell, dict):
+                            if "Num" in cell and "Int" in cell["Num"]:
+                                simplified_row.append(cell["Num"]["Int"])
+                            elif "Str" in cell:
+                                simplified_row.append(cell["Str"])
+                            else:
+                                simplified_value = next(
+                                    iter(cell.values()), str(cell)
+                                )  # Attempt to simplify further or convert to string
+                                if isinstance(simplified_value, dict):
+                                    simplified_row.append(
+                                        next(
+                                            iter(simplified_value.values()),
+                                            str(simplified_value),
+                                        )
+                                    )
+                                else:
+                                    simplified_row.append(simplified_value)
+                        else:
+                            simplified_row.append(cell)
+                    simplified_rows.append(simplified_row)
+
+                return tabulate(simplified_rows, headers=response_data["headers"])
+            else:
+                return response.text
+        except json.JSONDecodeError:
+            print(f"Error: Response: {response.text} could not be decoded as JSON")
+            return response.text
 
     def create(self, relation_name, columns):
         """Creates a new relation with the specified columns, making adjustments for optional parameters."""
@@ -96,9 +138,7 @@ class NexusDB:
 
         return response.text
 
-    def lookup(self, relation_name, fields=None, condition=""):
-        """Looks up data from the specified relation."""
-        # Using fields=None and then setting it to [] if None to avoid mutable default argument
+    def lookup(self, relation_name, fields=None, condition="", tabulate=False):
         if fields is None:
             fields = []
 
@@ -109,9 +149,9 @@ class NexusDB:
             "condition": condition,
         }
         response = requests.post(self.base_url, headers=self.headers, json=data)
-        return response.text
+        return self._process_response(response, tabulate)
 
-    def join(self, join_type, relations, return_fields, option=None):
+    def join(self, join_type, relations, return_fields, option=None, tabulate=False):
         """
         Executes a join query with the specified parameters.
 
@@ -135,7 +175,7 @@ class NexusDB:
             data["return"]["option"] = option
 
         response = requests.post(self.base_url, headers=self.headers, json=data)
-        return response.text
+        return self._process_response(response, tabulate)
 
     def delete(self, relation_name, primary_keys):
         """Deletes data from the specified relation based on primary keys."""
@@ -220,12 +260,13 @@ class NexusDB:
         search_radius=None,
         number_of_results=None,
         filter_statement=None,
+        tabulate=False,
     ):
         query_payload = {
             "query_type": "VectorSearch",
             "query_vector": query_vector,
         }
-        # Only add optional parameters to the query payload if they are not None
+
         if access_keys is not None:
             query_payload["access_keys"] = access_keys
         if search_radius is not None:
@@ -238,4 +279,4 @@ class NexusDB:
         response = requests.post(
             self.base_url, json=query_payload, headers=self.headers
         )
-        return response.text
+        return self._process_response(response, tabulate)

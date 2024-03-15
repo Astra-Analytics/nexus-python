@@ -15,8 +15,8 @@ class NexusDB:
 
     def _process_response(self, response, tabulate_option=False):
         if not response.text:
-            print("Error: Empty response from server")
-            return
+            error = "Error: Empty response from server"
+            return error
 
         try:
             response_data = response.json()
@@ -57,8 +57,8 @@ class NexusDB:
             else:
                 return response.text
         except json.JSONDecodeError:
-            print(f"Error: Response: {response.text} could not be decoded as JSON")
-            return response.text
+            error = f"Error: Response: {response.text} could not be decoded as JSON"
+            return error
 
     def create(self, relation_name, columns):
         """Creates a new relation with the specified columns, making adjustments for optional parameters."""
@@ -186,7 +186,6 @@ class NexusDB:
             "relation_name": relation_name,
             "condition": condition,
         }
-        print(f"data: {data}\n\n")
         response = requests.post(self.base_url, headers=self.headers, json=data)
         return response.text
 

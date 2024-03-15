@@ -25,8 +25,8 @@ def main():
     print("Insert data response:", insert_response)
 
     # Step 3: Delete the data based on a primary key
-    primary_keys = {"id": 1}
-    delete_response = nexus_db.delete(relation_name, primary_keys)
+    condition = "id = 1"
+    delete_response = nexus_db.delete(relation_name, condition)
     print("Delete data response:", delete_response)
 
     # Optional: Lookup to verify deletion (not implemented in the provided class, adjust as needed)

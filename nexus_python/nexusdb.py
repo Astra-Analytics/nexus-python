@@ -1,3 +1,4 @@
+import json
 import requests
 import os
 from tabulate import tabulate
@@ -177,15 +178,13 @@ class NexusDB:
         response = requests.post(self.base_url, headers=self.headers, json=data)
         return self._process_response(response, tabulate)
 
-    def delete(self, relation_name, primary_keys):
-        """Deletes data from the specified relation based on primary keys."""
-        # Convert primary_keys dict to the expected list format
-        primary_keys_list = [{"name": k, "value": v} for k, v in primary_keys.items()]
+    def delete(self, relation_name, condition):
+        """Deletes data from the specified relation where condition is met."""
 
         data = {
             "query_type": "Delete",
             "relation_name": relation_name,
-            "primary_keys": primary_keys_list,
+            "condition": condition,
         }
         print(f"data: {data}\n\n")
         response = requests.post(self.base_url, headers=self.headers, json=data)

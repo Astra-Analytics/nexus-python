@@ -1,7 +1,14 @@
 import json
-import requests
+import logging
 import os
+
+import requests
 from tabulate import tabulate
+
+# Initialize logger
+logger = logging.getLogger("nexusdb")
+logger.setLevel(logging.WARNING)
+logger.addHandler(logging.NullHandler())
 
 
 class NexusDB:
@@ -13,47 +20,80 @@ class NexusDB:
 
         self.headers = {"Content-Type": "application/json", "API-Key": self.api_key}
 
-    def _process_response(self, response, tabulate_option=False):
+    @staticmethod
+    def configure_logging(level=logging.INFO, filename=None):
+        """Configure logging for debugging purposes."""
+        logger.setLevel(level)
+        handler = (
+            logging.StreamHandler()
+            if filename is None
+            else logging.FileHandler(filename)
+        )
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        logger.propagate = False
+
+    def _process_response(self, response, tabulate_option=False, include_types=True):
         if not response.text:
             error = "Error: Empty response from server"
             return error
 
         try:
             response_data = response.json()
-            if (
-                tabulate_option
-                and "headers" in response_data
-                and "rows" in response_data
-            ):
-                # Simplify and prepare rows for tabulation
-                simplified_rows = []
-                for row in response_data["rows"]:
-                    simplified_row = []
-                    for cell in row:
-                        # Simplify data structure for Num and Str types, or fallback to the original structure
-                        if isinstance(cell, dict):
-                            if "Num" in cell and "Int" in cell["Num"]:
-                                simplified_row.append(cell["Num"]["Int"])
-                            elif "Str" in cell:
-                                simplified_row.append(cell["Str"])
-                            else:
-                                simplified_value = next(
-                                    iter(cell.values()), str(cell)
-                                )  # Attempt to simplify further or convert to string
-                                if isinstance(simplified_value, dict):
-                                    simplified_row.append(
-                                        next(
-                                            iter(simplified_value.values()),
-                                            str(simplified_value),
-                                        )
-                                    )
-                                else:
-                                    simplified_row.append(simplified_value)
-                        else:
-                            simplified_row.append(cell)
-                    simplified_rows.append(simplified_row)
+            if "headers" in response_data and "rows" in response_data:
+                headers = response_data["headers"]
+                rows = response_data["rows"]
 
-                return tabulate(simplified_rows, headers=response_data["headers"])
+                def extract_value_and_type(cell):
+                    if isinstance(cell, dict):
+                        for key, value in cell.items():
+                            if key == "Num":
+                                if "Int" in value:
+                                    return value["Int"], "Int"
+                                elif "Float" in value:
+                                    return value["Float"], "Float"
+                            elif key == "Str":
+                                return value, "Str"
+                            elif key == "Bool":
+                                return value, "Bool"
+                            elif key == "Uuid":
+                                return value, "Uuid"
+                            elif key == "Json":
+                                return value, "Json"
+                        return str(cell), "Unknown"
+                    return cell, "Unknown"
+
+                if include_types:
+                    if rows:
+                        # Extract types from the first row
+                        first_row = rows[0]
+                        typed_headers = [
+                            f"{headers[i]} ({extract_value_and_type(cell)[1]})"
+                            for i, cell in enumerate(first_row)
+                        ]
+                    else:
+                        typed_headers = headers
+
+                simplified_rows = [
+                    [extract_value_and_type(cell)[0] for cell in row] for row in rows
+                ]
+
+                if tabulate_option:
+                    if include_types:
+                        return tabulate(simplified_rows, headers=typed_headers)
+                    else:
+                        return tabulate(simplified_rows, headers=headers)
+                else:
+                    if include_types:
+                        # Return raw response with types included
+                        return json.dumps(response_data)
+                    else:
+                        # Modify the response to exclude types
+                        response_data["rows"] = simplified_rows
+                        return json.dumps(response_data)
             else:
                 return response.text
         except json.JSONDecodeError:
@@ -97,49 +137,158 @@ class NexusDB:
             "fields": formatted_columns,
         }
 
+        logger.debug(
+            f"Creating relation {relation_name} with columns: {formatted_columns}"
+        )
         response = requests.post(self.base_url, headers=self.headers, json=data)
+        logger.debug(f"Create response: {response.text}")
         return response.text
 
-    def insert(self, relation_name, fields, values):
-        """Inserts data into the specified relation."""
-        data = {
-            "query_type": "Insert",
+    def modify_data(
+        self,
+        operation_type,
+        relation_name,
+        fields=None,
+        values=None,
+        text=None,
+        embeddings=None,
+        access_keys=None,
+        metadata=None,
+        references=None,
+    ):
+        """
+        Modifies data in the specified relation, handling insert, upsert, and update operations
+        with optional parameters like embeddings, metadata, etc.
+
+        :param operation_type: The type of operation ("Insert", "Upsert", "Update").
+        :param relation_name: The name of the relation to modify.
+        :param fields: List of fields to include in the operation.
+        :param values: List of values to include in the operation.
+        :param text: Optional text content for vector-based operations.
+        :param embeddings: Optional vector content for vector-based operations.
+        :param access_keys: Optional access keys for authorization.
+        :param metadata: Optional metadata for the operation.
+        :param references: Optional references for the operation.
+        :return: The server's response.
+        """
+        # Validation logic
+        if (fields is None) != (values is None):
+            raise ValueError("Both fields and values must be specified together.")
+        if (text is None) != (embeddings is None):
+            raise ValueError("Both text and embeddings must be specified together.")
+        if fields is None and text is None:
+            raise ValueError(
+                "You must specify fields/values or text/embeddings, or both."
+            )
+
+        payload = {
+            "query_type": operation_type,
             "relation_name": relation_name,
-            "fields": fields,
-            "values": values,
         }
 
-        response = requests.post(self.base_url, headers=self.headers, json=data)
+        if fields is not None and values is not None:
+            payload["fields"] = fields
+            payload["values"] = values
+        if text is not None and embeddings is not None:
+            payload["searchable_content"] = {
+                "text": text,
+                "embeddings": embeddings,
+            }
+        if access_keys is not None:
+            payload["access_keys"] = access_keys
+        if metadata is not None:
+            if "searchable_content" not in payload:
+                payload["searchable_content"] = {}
+            payload["searchable_content"]["metadata"] = metadata
+        if references is not None:
+            if "searchable_content" not in payload:
+                payload["searchable_content"] = {}
+            payload["searchable_content"]["reference"] = references
 
+        logger.debug(
+            f"{operation_type} into {relation_name} with payload: {json.dumps(payload, indent=2)}"
+        )
+        response = requests.post(self.base_url, headers=self.headers, json=payload)
+        logger.debug(f"{operation_type} response: {response.text}")
         return response.text
 
-    def upsert(self, relation_name, fields, values):
-        """Inserts data into the specified relation."""
-        data = {
-            "query_type": "Upsert",
-            "relation_name": relation_name,
-            "fields": fields,
-            "values": values,
-        }
+    def insert(
+        self,
+        relation_name,
+        fields=None,
+        values=None,
+        text=None,
+        embeddings=None,
+        access_keys=None,
+        metadata=None,
+        references=None,
+    ):
+        return self.modify_data(
+            "Insert",
+            relation_name,
+            fields,
+            values,
+            text,
+            embeddings,
+            access_keys,
+            metadata,
+            references,
+        )
 
-        response = requests.post(self.base_url, headers=self.headers, json=data)
+    def upsert(
+        self,
+        relation_name,
+        fields=None,
+        values=None,
+        text=None,
+        embeddings=None,
+        access_keys=None,
+        metadata=None,
+        references=None,
+    ):
+        return self.modify_data(
+            "Upsert",
+            relation_name,
+            fields,
+            values,
+            text,
+            embeddings,
+            access_keys,
+            metadata,
+            references,
+        )
 
-        return response.text
+    def update(
+        self,
+        relation_name,
+        fields=None,
+        values=None,
+        text=None,
+        embeddings=None,
+        access_keys=None,
+        metadata=None,
+        references=None,
+    ):
+        return self.modify_data(
+            "Update",
+            relation_name,
+            fields,
+            values,
+            text,
+            embeddings,
+            access_keys,
+            metadata,
+            references,
+        )
 
-    def update(self, relation_name, fields, values):
-        """Inserts data into the specified relation."""
-        data = {
-            "query_type": "Update",
-            "relation_name": relation_name,
-            "fields": fields,
-            "values": values,
-        }
-
-        response = requests.post(self.base_url, headers=self.headers, json=data)
-
-        return response.text
-
-    def lookup(self, relation_name, fields=None, condition="", tabulate=False):
+    def lookup(
+        self,
+        relation_name,
+        fields=None,
+        condition="",
+        tabulate=False,
+        include_types=False,
+    ):
         if fields is None:
             fields = []
 
@@ -149,10 +298,22 @@ class NexusDB:
             "fields": fields,
             "condition": condition,
         }
+        logger.debug(
+            f"Looking up {relation_name} with fields: {fields} and condition: {condition}"
+        )
         response = requests.post(self.base_url, headers=self.headers, json=data)
-        return self._process_response(response, tabulate)
+        logger.debug(f"Lookup response: {response.text}")
+        return self._process_response(response, tabulate, include_types)
 
-    def join(self, join_type, relations, return_fields, option=None, tabulate=False):
+    def join(
+        self,
+        join_type,
+        relations,
+        return_fields,
+        option=None,
+        tabulate=False,
+        include_types=False,
+    ):
         """
         Executes a join query with the specified parameters.
 
@@ -175,8 +336,12 @@ class NexusDB:
         if option is not None:
             data["return"]["option"] = option
 
+        logger.debug(
+            f"Executing {join_type} join on relations: {relations} with return fields: {return_fields} and option: {option}"
+        )
         response = requests.post(self.base_url, headers=self.headers, json=data)
-        return self._process_response(response, tabulate)
+        logger.debug(f"Join response: {response.text}")
+        return self._process_response(response, tabulate, include_types)
 
     def delete(self, relation_name, condition):
         """Deletes data from the specified relation where condition is met."""
@@ -186,7 +351,9 @@ class NexusDB:
             "relation_name": relation_name,
             "condition": condition,
         }
+        logger.debug(f"Deleting from {relation_name} where condition: {condition}")
         response = requests.post(self.base_url, headers=self.headers, json=data)
+        logger.debug(f"Delete response: {response.text}")
         return response.text
 
     def edit_fields(
@@ -217,38 +384,13 @@ class NexusDB:
             "access_keys": access_keys if access_keys is not None else [],
         }
 
+        logger.debug(
+            f"Editing fields for {relation_name} with fields: {fields}, add_columns: {add_columns}, condition: {condition}"
+        )
         # Send the request to the server
         response = requests.post(self.base_url, headers=self.headers, json=data)
-
+        logger.debug(f"Edit fields response: {response.text}")
         # Return the server's response
-        return response.text
-
-    def insert_with_vector(
-        self,
-        relation_name,
-        text,
-        vectors,
-        access_keys=None,
-        metadata=None,
-        references=None,
-    ):
-        payload = {
-            "query_type": "Insert",
-            "relation_name": relation_name,
-            "searchable_content": {
-                "text": text,
-                "vectors": vectors,
-            },
-        }
-        # Only add optional parameters to the payload if they are not None
-        if access_keys is not None:
-            payload["searchable_content"]["access_keys"] = access_keys
-        if metadata is not None:
-            payload["searchable_content"]["metadata"] = metadata
-        if references is not None:
-            payload["searchable_content"]["reference"] = references
-
-        response = requests.post(self.base_url, json=payload, headers=self.headers)
         return response.text
 
     def vector_search(
@@ -259,6 +401,7 @@ class NexusDB:
         number_of_results=None,
         filter_statement=None,
         tabulate=False,
+        include_types=False,
     ):
         query_payload = {
             "query_type": "VectorSearch",
@@ -274,7 +417,52 @@ class NexusDB:
         if filter_statement is not None:
             query_payload["filter_statement"] = filter_statement
 
+        logger.debug(
+            f"Performing vector search with access keys: {access_keys}, search radius: {search_radius}, number of results: {number_of_results}, filter statement: {filter_statement}"
+        )
         response = requests.post(
             self.base_url, json=query_payload, headers=self.headers
         )
-        return self._process_response(response, tabulate)
+        logger.debug(f"Vector search response: {response.text}")
+        return self._process_response(response, tabulate, include_types)
+
+    def recursive_query(
+        self,
+        relation_name,
+        source_field,
+        target_field,
+        starting_condition,
+        tabulate=False,
+        include_types=False,
+    ):
+        """
+        Executes a recursive query with the specified parameters.
+
+        :param relation_name: The name of the relation to query.
+        :param source_field: The source field for the recursion.
+        :param target_field: The target field for the recursion.
+        :param starting_condition: The starting condition for the recursion.
+        :param return_fields: Fields to be returned in the result.
+        :return: The result of the recursive query as a JSON object.
+        """
+        relation = {
+            "relation_name": relation_name,
+            "fields": [],  # Will be populated by the server
+            "condition": starting_condition,
+            "defaults": None,
+            "access_keys": None,
+        }
+        data = {
+            "query_type": "Recursion",
+            "relation": relation,
+            "source": source_field,
+            "target": target_field,
+        }
+
+        logger.debug(
+            f"Executing recursive query on relation: {relation_name} with source field: {source_field}, "
+            f"target field: {target_field}, starting condition: {starting_condition}"
+        )
+        response = requests.post(self.base_url, headers=self.headers, json=data)
+        logger.debug(f"Recursive query response: {response.text}")
+        return self._process_response(response, tabulate, include_types)

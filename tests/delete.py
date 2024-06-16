@@ -1,6 +1,8 @@
-from nexus_python.nexusdb import NexusDB
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
+
+from nexus_python.nexusdb import NexusDB
 
 # Load environment variables from .env file
 load_dotenv()

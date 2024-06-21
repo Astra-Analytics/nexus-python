@@ -1,3 +1,4 @@
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -6,6 +7,11 @@ from nexus_python.nexusdb import NexusDB
 
 # Load environment variables from .env file
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+NexusDB.configure_logging(level=logging.DEBUG)
 
 
 def main():
@@ -17,7 +23,6 @@ def main():
         {"name": "sourceId"},
         {"name": "sourceName"},
         {"name": "access_keys", "type": "Array(String)?"},
-        {"name": "owner"},
         {"name": "relationship"},
         {"name": "targetName"},
         {"name": "targetId"},
@@ -30,7 +35,6 @@ def main():
         "sourceId",
         "sourceName",
         "access_keys",
-        "owner",
         "relationship",
         "targetName",
         "targetId",
@@ -40,7 +44,6 @@ def main():
             "emailmessage_1",
             "Re: Poetry",
             None,
-            "user_1234",
             "about",
             "Poetry",
             "emailmessage_0",
@@ -49,7 +52,6 @@ def main():
             "emailmessage_2",
             "Re: Poetry",
             None,
-            "user_1234",
             "about",
             "Re: Poetry",
             "emailmessage_1",
@@ -58,7 +60,6 @@ def main():
             "emailmessage_3",
             "Re: Poetry",
             None,
-            "user_1234",
             "about",
             "Re: Poetry",
             "emailmessage_2",
@@ -67,7 +68,6 @@ def main():
             "emailmessage_4",
             "Re: Poetry",
             None,
-            "user_1234",
             "about",
             "Re: Poetry",
             "emailmessage_3",
@@ -76,7 +76,6 @@ def main():
             "emailmessage_5",
             "Re: Poetry",
             None,
-            "user_1234",
             "about",
             "Re: Poetry",
             "emailmessage_4",
@@ -85,7 +84,6 @@ def main():
             "emailmessage_1",
             "Re: Poetry",
             None,
-            "user_1234",
             "subjectOf",
             "Re: Poetry",
             "emailmessage_2",
@@ -94,7 +92,6 @@ def main():
             "emailmessage_2",
             "Re: Poetry",
             None,
-            "user_1234",
             "subjectOf",
             "Re: Poetry",
             "emailmessage_3",
@@ -103,7 +100,6 @@ def main():
             "emailmessage_3",
             "Re: Poetry",
             None,
-            "user_1234",
             "subjectOf",
             "Re: Poetry",
             "emailmessage_4",
@@ -112,7 +108,6 @@ def main():
             "emailmessage_4",
             "Re: Poetry",
             None,
-            "user_1234",
             "subjectOf",
             "Re: Poetry",
             "emailmessage_5",
@@ -121,21 +116,19 @@ def main():
             "emailmessage_0",
             "Poetry",
             None,
-            "user_1234",
             "subjectOf",
             "Re: Poetry",
             "emailmessage_1",
         ],
-        ["false_1", "Re: Poetry", None, "user_1234", "about", "Poetry", "false_0"],
-        ["false_2", "Re: Poetry", None, "user_1234", "about", "Re: Poetry", "false_1"],
-        ["false_3", "Re: Poetry", None, "user_1234", "about", "Re: Poetry", "false_2"],
-        ["false_4", "Re: Poetry", None, "user_1234", "about", "Re: Poetry", "false_3"],
-        ["false_5", "Re: Poetry", None, "user_1234", "about", "Re: Poetry", "false_4"],
+        ["false_1", "Re: Poetry", None, "about", "Poetry", "false_0"],
+        ["false_2", "Re: Poetry", None, "about", "Re: Poetry", "false_1"],
+        ["false_3", "Re: Poetry", None, "about", "Re: Poetry", "false_2"],
+        ["false_4", "Re: Poetry", None, "about", "Re: Poetry", "false_3"],
+        ["false_5", "Re: Poetry", None, "about", "Re: Poetry", "false_4"],
         [
             "false_1",
             "Re: Poetry",
             None,
-            "user_1234",
             "subjectOf",
             "Re: Poetry",
             "false_2",
@@ -144,7 +137,6 @@ def main():
             "false_2",
             "Re: Poetry",
             None,
-            "user_1234",
             "subjectOf",
             "Re: Poetry",
             "false_3",
@@ -153,7 +145,6 @@ def main():
             "false_3",
             "Re: Poetry",
             None,
-            "user_1234",
             "subjectOf",
             "Re: Poetry",
             "false_4",
@@ -162,14 +153,13 @@ def main():
             "false_4",
             "Re: Poetry",
             None,
-            "user_1234",
             "subjectOf",
             "Re: Poetry",
             "false_5",
         ],
-        ["false_0", "Poetry", None, "user_1234", "subjectOf", "Re: Poetry", "false_1"],
+        ["false_0", "Poetry", None, "subjectOf", "Re: Poetry", "false_1"],
     ]
-    insert_response = nexus_db.insert(relation_name, fields, values)
+    insert_response = nexus_db.upsert(relation_name, fields, values)
     print("Insert data response:", insert_response)
 
     # Test parameters for recursive query

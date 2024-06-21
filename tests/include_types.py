@@ -10,17 +10,17 @@ def main():
     nexus_db = NexusDB()
 
     # Step 1: Create a new relation
-    relation_name = "example_relation2"
-    # columns = [
-    #     {"name": "id"},
-    #     {"name": "name"},
-    # ]
-    # create_response = nexus_db.create(relation_name, columns)
-    # print("Create relation response:", create_response)
+    relation_name = "example_relation3"
+    columns = [
+        {"name": "id"},
+        {"name": "name"},
+    ]
+    create_response = nexus_db.create(relation_name, columns)
+    print("Create relation response:", create_response)
 
     # Step 2: Insert data into the relation
     fields = ["id", "name"]
-    values = [[1, "Item 1"], [2, "Item 2"]]
+    values = [[1, ["a", "b", [1, 2, 3]]], [2, ["c", "d", [4, 5, 6]]]]
     insert_response = nexus_db.insert(relation_name, fields, values)
     print("\nInsert data response:", insert_response)
 

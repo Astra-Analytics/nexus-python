@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "nexus-python"
-version = "0.3.0"
+version = "0.3.1"
 description = "A simple interface for interacting with NexusDB."
 authors = ["Will Humble <w@astraanalytics.co>"]
 license = "MIT"

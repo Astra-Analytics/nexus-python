@@ -36,7 +36,7 @@ class NexusDB:
         logger.addHandler(handler)
         logger.propagate = False
 
-    def _process_response(self, response, tabulate_option=False, include_types=True):
+    def _process_response(self, response, tabulate_option: bool, include_types: bool):
         if not response.text:
             error = "Error: Empty response from server"
             return error
@@ -63,6 +63,11 @@ class NexusDB:
                                 return value, "Uuid"
                             elif key == "Json":
                                 return value, "Json"
+                            elif key == "List":
+                                # Recursively process nested lists
+                                return [
+                                    extract_value_and_type(item)[0] for item in value
+                                ], "List"
                         return str(cell), "Unknown"
                     return cell, "Unknown"
 
@@ -88,7 +93,6 @@ class NexusDB:
                         return tabulate(simplified_rows, headers=headers)
                 else:
                     if include_types:
-                        # Return raw response with types included
                         return json.dumps(response_data)
                     else:
                         # Modify the response to exclude types
